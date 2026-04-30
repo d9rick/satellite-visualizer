@@ -1720,7 +1720,8 @@ class RotatingGlobeState extends State<RotatingGlobe>
               // Disable InteractiveViewer's scale to use our custom zoom handling
               scaleEnabled: false,
               panEnabled: false,
-              trackpadScrollCausesScale: true, // Let trackpad scroll cause scale (zoom) instead of pan
+              trackpadScrollCausesScale:
+                  true, // Let trackpad scroll cause scale (zoom) instead of pan
               onInteractionStart: (ScaleStartDetails details) {
                 _lastRotationX = rotationX;
                 _lastRotationZ = rotationZ;
