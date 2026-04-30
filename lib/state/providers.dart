@@ -4,6 +4,7 @@ import 'package:flutter_sat/data/tle/tle_api.dart';
 import 'package:flutter_sat/data/tle/tle_parser.dart';
 import 'package:flutter_sat/data/tle/tle_repository.dart';
 import 'package:flutter_sat/domain/satellite/models/satellite.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 final tleRepositoryProvider = Provider<TleRepository>((ref) {
   return TleRepository(api: TleApi(), parser: TleParser());
@@ -11,9 +12,22 @@ final tleRepositoryProvider = Provider<TleRepository>((ref) {
 
 class SelectedGroupNotifier extends Notifier<String> {
   @override
-  String build() => AppConstants.defaultTleGroup;
+  String build() {
+    final savedGroup = _settingsBox.get(AppConstants.selectedGroupKey) as String?;
+    final knownGroups = AppConstants.tleGroups.map((option) => option.group);
+    if (savedGroup != null && knownGroups.contains(savedGroup)) {
+      return savedGroup;
+    }
+    return AppConstants.defaultTleGroup;
+  }
 
-  void select(String group) => state = group;
+  Box<dynamic> get _settingsBox => Hive.box(AppConstants.satelliteSettingsBox);
+
+  Future<void> select(String group) async {
+    if (state == group) return;
+    state = group;
+    await _settingsBox.put(AppConstants.selectedGroupKey, group);
+  }
 }
 
 final selectedGroupProvider = NotifierProvider<SelectedGroupNotifier, String>(
@@ -42,22 +56,45 @@ final selectedSatelliteProvider =
 
 class HiddenSatellitesNotifier extends Notifier<Set<int>> {
   @override
-  Set<int> build() => <int>{};
+  Set<int> build() {
+    final group = ref.watch(selectedGroupProvider);
+    return _loadHiddenSatellites(group);
+  }
 
-  void toggle(int noradCatId) {
+  Box<dynamic> get _settingsBox => Hive.box(AppConstants.satelliteSettingsBox);
+
+  Future<void> toggle(int noradCatId) async {
     if (state.contains(noradCatId)) {
       state = {...state}..remove(noradCatId);
     } else {
       state = {...state, noradCatId};
     }
+    await _saveHiddenSatellites();
   }
 
-  void toggleAll(List<SatelliteEntity> satellites, bool visible) {
+  Future<void> toggleAll(List<SatelliteEntity> satellites, bool visible) async {
     if (visible) {
       state = {};
     } else {
       state = satellites.map((s) => s.tle.noradCatId).toSet();
     }
+    await _saveHiddenSatellites();
+  }
+
+  Set<int> _loadHiddenSatellites(String group) {
+    final savedIds = _settingsBox.get(AppConstants.hiddenSatellitesKey(group));
+    if (savedIds is Iterable) {
+      return savedIds.whereType<int>().toSet();
+    }
+    return <int>{};
+  }
+
+  Future<void> _saveHiddenSatellites() async {
+    final group = ref.read(selectedGroupProvider);
+    await _settingsBox.put(
+      AppConstants.hiddenSatellitesKey(group),
+      state.toList()..sort(),
+    );
   }
 }
 

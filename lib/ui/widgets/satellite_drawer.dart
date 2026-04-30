@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_sat/core/constants.dart';
 import 'package:flutter_sat/state/providers.dart';
 import 'package:flutter_sat/ui/widgets/satellite_search_delegate.dart';
 
@@ -10,6 +11,7 @@ class SatelliteDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final satellitesAsync = ref.watch(satelliteListProvider);
     final hiddenSatellites = ref.watch(hiddenSatellitesProvider);
+    final selectedGroup = ref.watch(selectedGroupProvider);
 
     return Drawer(
       child: Column(
@@ -57,23 +59,49 @@ class SatelliteDrawer extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedGroup,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Group',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: AppConstants.tleGroups
+                      .map(
+                        (group) => DropdownMenuItem(
+                          value: group.group,
+                          child: Text(group.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (group) {
+                    if (group == null) return;
+                    ref.read(selectedGroupProvider.notifier).select(group);
+                  },
+                ),
+                const SizedBox(height: 8),
                 satellitesAsync.when(
                   data: (sats) {
-                    final visibleCount = sats.length - hiddenSatellites.length;
+                    final hiddenCount = sats
+                        .where((sat) => hiddenSatellites.contains(
+                              sat.tle.noradCatId,
+                            ))
+                        .length;
+                    final visibleCount = sats.length - hiddenCount;
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('$visibleCount / ${sats.length} visible'),
                         TextButton(
                           onPressed: () {
-                            final allHidden =
-                                hiddenSatellites.length == sats.length;
+                            final allHidden = hiddenCount == sats.length;
                             ref
                                 .read(hiddenSatellitesProvider.notifier)
                                 .toggleAll(sats, allHidden);
                           },
                           child: Text(
-                            hiddenSatellites.length == sats.length
+                            hiddenCount == sats.length
                                 ? 'Show All'
                                 : 'Hide All',
                           ),

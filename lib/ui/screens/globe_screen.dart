@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_sat/core/constants.dart';
 import 'package:flutter_sat/state/providers.dart';
 import 'package:flutter_sat/ui/widgets/globe_view.dart';
 import 'package:flutter_sat/ui/widgets/satellite_drawer.dart';
@@ -10,11 +11,21 @@ class GlobeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final satellitesAsync = ref.watch(satelliteListProvider);
+    final selectedGroup = ref.watch(selectedGroupProvider);
+    final selectedGroupLabel = AppConstants.tleGroups
+        .firstWhere(
+          (option) => option.group == selectedGroup,
+          orElse: () => const TleGroupOption(
+            AppConstants.defaultTleGroup,
+            'Satellites',
+          ),
+        )
+        .label;
 
     return Scaffold(
       appBar: AppBar(
         title: satellitesAsync.when(
-          data: (sats) => Text('Satellites: ${sats.length}'),
+          data: (sats) => Text('$selectedGroupLabel: ${sats.length}'),
           loading: () => const Text('Loading...'),
           error: (err, stack) => const Text('Error'),
         ),

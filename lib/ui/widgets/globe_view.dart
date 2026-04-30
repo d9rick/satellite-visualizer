@@ -23,12 +23,17 @@ class GlobeView extends ConsumerStatefulWidget {
 
 class _GlobeViewState extends ConsumerState<GlobeView>
     with SingleTickerProviderStateMixin {
+  static const Duration _satelliteUpdateInterval = Duration(milliseconds: 250);
+  static const double _degreesToRadians = math.pi / 180;
+  static const double _radiansToDegrees = 180 / math.pi;
+
   late final FlutterEarthGlobeController _controller;
   bool _isRotating = false;
   bool _showGrid = false;
 
   late Ticker _ticker;
-  final List<SatelliteEntity> _activeSatellites = [];
+  Duration _lastSatelliteUpdate = Duration.zero;
+  final List<_SatelliteOrbit> _activeSatellites = [];
 
   // Calculate GMST at given time to sync Earth's rotation frame with celestial RAAN
   double _calculateGMST(DateTime date) {
@@ -49,8 +54,10 @@ class _GlobeViewState extends ConsumerState<GlobeView>
       surface: const AssetImage('assets/2k_earth_day.jpg'),
     );
 
-    _ticker = createTicker((_) {
+    _ticker = createTicker((elapsed) {
       if (!mounted) return;
+      if (elapsed - _lastSatelliteUpdate < _satelliteUpdateInterval) return;
+      _lastSatelliteUpdate = elapsed;
       _updateSatellitePositions();
     });
 
@@ -73,63 +80,30 @@ class _GlobeViewState extends ConsumerState<GlobeView>
     final gmst = _calculateGMST(now);
 
     for (final sat in _activeSatellites) {
-      final tle = sat.tle;
-
-      // Calculate Earth-Relative Epoch Time
-      final yy = (tle.epochYear / 1000).floor();
-      final year = yy < 57 ? 2000 + yy : 1900 + yy;
-      final days = tle.epochYear - (yy * 1000);
-      final daysInt = days.floor();
-      final fraction = days - daysInt;
-      final epochTime = DateTime.utc(year, 1, 1).add(
-        Duration(
-          days: daysInt - 1,
-          microseconds: (fraction * 24 * 60 * 60 * 1000000).round(),
-        ),
-      );
-
-      final periodSeconds = tle.meanMotion > 0
-          ? (86400.0 / tle.meanMotion)
-          : 5400.0;
-      final elapsedMs = now.difference(epochTime).inMilliseconds;
-      final periodMs = (periodSeconds * 1000).round();
-
-      if (periodMs <= 0) continue;
-
+      final elapsedMs = now.millisecondsSinceEpoch - sat.epochMs;
       final phaseRad =
-          (tle.meanAnomaly * math.pi / 180) +
-          (2 * math.pi * elapsedMs / periodMs);
-      final trueAnomaly = phaseRad;
-
-      final incRad = tle.inclination * math.pi / 180;
-      final raanRad = tle.raan * math.pi / 180;
-      final argPeriRad = tle.argumentOfPerigee * math.pi / 180;
-
-      final u = trueAnomaly + argPeriRad;
+          sat.meanAnomalyRad + (2 * math.pi * elapsedMs / sat.periodMs);
+      final u = phaseRad + sat.argumentOfPerigeeRad;
 
       final latitude =
-          math.asin(math.sin(incRad) * math.sin(u)) * 180 / math.pi;
+          math.asin(sat.sinInclination * math.sin(u)) * _radiansToDegrees;
 
-      // Calculate inertial longitude
       double longitude =
-          (raanRad + math.atan2(math.cos(incRad) * math.sin(u), math.cos(u))) *
-          180 /
-          math.pi;
-
-      // Subtract GMST to convert from ECI (inertial) longitude to ECEF (Earth-fixed) longitude.
-      longitude = longitude - gmst;
+          (sat.raanRad +
+                      math.atan2(
+                        sat.cosInclination * math.sin(u),
+                        math.cos(u),
+                      )) *
+                  _radiansToDegrees -
+              gmst;
 
       longitude = longitude % 360;
       if (longitude > 180) longitude -= 360;
 
-      // Only calculate, let flutter_earth_globe _update points natively?
-      // Replace the satellite's position directly on the globes controller
-      try {
-        _controller.updateSatellite(
-          sat.tle.noradCatId.toString(),
-          coordinates: GlobeCoordinates(latitude, longitude),
-        );
-      } catch (_) {}
+      _controller.updateSatellite(
+        sat.id,
+        coordinates: GlobeCoordinates(latitude, longitude),
+      );
     }
   }
 
@@ -144,23 +118,26 @@ class _GlobeViewState extends ConsumerState<GlobeView>
 
   void _addSatellites(List<SatelliteEntity> satellites, Set<int> hiddenIds) {
     _activeSatellites.clear();
+    final showLabels = satellites.length <= 250;
     for (final sat in satellites) {
       if (hiddenIds.contains(sat.tle.noradCatId)) continue;
-      _activeSatellites.add(sat);
+      final orbit = _SatelliteOrbit.fromSatellite(sat);
+      if (orbit == null) continue;
+      _activeSatellites.add(orbit);
 
       _controller.addSatellite(
         globe.Satellite(
-          id: sat.tle.noradCatId.toString(),
+          id: orbit.id,
           coordinates: const GlobeCoordinates(
             0,
             0,
           ), // Will be instantly updated by ticker
           orbit: null, // Turn off built-in rotation bug
-          altitude: 0.06,
-          label: sat.label,
+          altitude: 0.045,
+          label: showLabels ? sat.label : '',
           style: const globe.SatelliteStyle(
-            size: 3,
-            color: Colors.greenAccent,
+            size: 1.8,
+            color: Color(0xCC80FFE8),
             shape: globe.SatelliteShape.circle,
           ),
           onTap: () {
@@ -173,6 +150,7 @@ class _GlobeViewState extends ConsumerState<GlobeView>
         ),
       );
     }
+    _updateSatellitePositions();
   }
 
   void _toggleRotation() {
@@ -189,8 +167,8 @@ class _GlobeViewState extends ConsumerState<GlobeView>
       _showGrid = !_showGrid;
       if (_showGrid) {
         // Draw latitude and longitude grids
-        for (int lon = -180; lon <= 180; lon += 5) {
-          for (int lat = -90; lat <= 90; lat += 5) {
+        for (int lon = -180; lon <= 180; lon += 10) {
+          for (int lat = -90; lat <= 90; lat += 10) {
             // We want to skip drawing points where prime or equator lines exist
             if (lon == 0 || lat == 0) continue;
 
@@ -293,6 +271,59 @@ class _GlobeViewState extends ConsumerState<GlobeView>
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SatelliteOrbit {
+  final String id;
+  final int epochMs;
+  final double periodMs;
+  final double meanAnomalyRad;
+  final double sinInclination;
+  final double cosInclination;
+  final double raanRad;
+  final double argumentOfPerigeeRad;
+
+  const _SatelliteOrbit({
+    required this.id,
+    required this.epochMs,
+    required this.periodMs,
+    required this.meanAnomalyRad,
+    required this.sinInclination,
+    required this.cosInclination,
+    required this.raanRad,
+    required this.argumentOfPerigeeRad,
+  });
+
+  static _SatelliteOrbit? fromSatellite(SatelliteEntity satellite) {
+    final tle = satellite.tle;
+    if (tle.meanMotion <= 0) return null;
+
+    final yy = (tle.epochYear / 1000).floor();
+    final year = yy < 57 ? 2000 + yy : 1900 + yy;
+    final days = tle.epochYear - (yy * 1000);
+    final daysInt = days.floor();
+    final fraction = days - daysInt;
+    final epochTime = DateTime.utc(year, 1, 1).add(
+      Duration(
+        days: daysInt - 1,
+        microseconds: (fraction * 24 * 60 * 60 * 1000000).round(),
+      ),
+    );
+    final inclinationRad =
+        tle.inclination * _GlobeViewState._degreesToRadians;
+
+    return _SatelliteOrbit(
+      id: tle.noradCatId.toString(),
+      epochMs: epochTime.millisecondsSinceEpoch,
+      periodMs: 86400000.0 / tle.meanMotion,
+      meanAnomalyRad: tle.meanAnomaly * _GlobeViewState._degreesToRadians,
+      sinInclination: math.sin(inclinationRad),
+      cosInclination: math.cos(inclinationRad),
+      raanRad: tle.raan * _GlobeViewState._degreesToRadians,
+      argumentOfPerigeeRad:
+          tle.argumentOfPerigee * _GlobeViewState._degreesToRadians,
     );
   }
 }
