@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_sat/core/constants.dart';
@@ -12,6 +14,7 @@ class SatelliteDrawer extends ConsumerWidget {
     final satellitesAsync = ref.watch(satelliteListProvider);
     final hiddenSatellites = ref.watch(hiddenSatellitesProvider);
     final selectedGroup = ref.watch(selectedGroupProvider);
+    final renderLimit = ref.watch(satelliteRenderLimitProvider);
 
     return Drawer(
       child: Column(
@@ -113,6 +116,39 @@ class SatelliteDrawer extends ConsumerWidget {
                   error: (e, _) => Text('Error: $e'),
                 ),
               ],
+            ),
+          ),
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.speed),
+            title: const Text('Render limit'),
+            subtitle: satellitesAsync.when(
+              data: (sats) {
+                final visibleCount = sats
+                    .where((sat) => !hiddenSatellites.contains(
+                          sat.tle.noradCatId,
+                        ))
+                    .length;
+                final renderedCount = math.min(visibleCount, renderLimit);
+                return Text('$renderedCount of $visibleCount drawn');
+              },
+              loading: () => const Text('Loading...'),
+              error: (_, _) => const Text('Unavailable'),
+            ),
+            trailing: DropdownButton<int>(
+              value: renderLimit,
+              items: AppConstants.satelliteRenderLimits
+                  .map(
+                    (limit) => DropdownMenuItem(
+                      value: limit,
+                      child: Text('$limit'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (limit) {
+                if (limit == null) return;
+                ref.read(satelliteRenderLimitProvider.notifier).select(limit);
+              },
             ),
           ),
           Expanded(

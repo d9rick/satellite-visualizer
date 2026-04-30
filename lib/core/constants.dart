@@ -32,6 +32,19 @@ abstract class AppConstants {
 
   static const String selectedGroupKey = 'selected_group';
 
+  static const String renderLimitKey = 'satellite_render_limit';
+
+  static const int defaultSatelliteRenderLimit = 1500;
+
+  static const List<int> satelliteRenderLimits = [
+    500,
+    1000,
+    1500,
+    3000,
+    6000,
+    10000,
+  ];
+
   static String hiddenSatellitesKey(String group) => 'hidden_satellites_$group';
 
   static const Duration cacheDuration = Duration(hours: 6);

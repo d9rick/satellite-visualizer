@@ -63,7 +63,11 @@ class _GlobeViewState extends ConsumerState<GlobeView>
 
     _controller.onLoaded = () {
       if (mounted) {
-        _addSatellites(widget.satellites, ref.read(hiddenSatellitesProvider));
+        _addSatellites(
+          widget.satellites,
+          ref.read(hiddenSatellitesProvider),
+          ref.read(satelliteRenderLimitProvider),
+        );
         _ticker.start();
       }
     };
@@ -112,15 +116,28 @@ class _GlobeViewState extends ConsumerState<GlobeView>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.satellites != widget.satellites) {
       _controller.clearSatellites();
-      _addSatellites(widget.satellites, ref.read(hiddenSatellitesProvider));
+      _addSatellites(
+        widget.satellites,
+        ref.read(hiddenSatellitesProvider),
+        ref.read(satelliteRenderLimitProvider),
+      );
     }
   }
 
-  void _addSatellites(List<SatelliteEntity> satellites, Set<int> hiddenIds) {
+  void _addSatellites(
+    List<SatelliteEntity> satellites,
+    Set<int> hiddenIds,
+    int renderLimit,
+  ) {
     _activeSatellites.clear();
-    final showLabels = satellites.length <= 250;
-    for (final sat in satellites) {
-      if (hiddenIds.contains(sat.tle.noradCatId)) continue;
+    final satellitesToRender = _pickSatellitesToRender(
+      satellites,
+      hiddenIds,
+      renderLimit,
+    );
+    final showLabels = satellitesToRender.length <= 250;
+
+    for (final sat in satellitesToRender) {
       final orbit = _SatelliteOrbit.fromSatellite(sat);
       if (orbit == null) continue;
       _activeSatellites.add(orbit);
@@ -151,6 +168,25 @@ class _GlobeViewState extends ConsumerState<GlobeView>
       );
     }
     _updateSatellitePositions();
+  }
+
+  List<SatelliteEntity> _pickSatellitesToRender(
+    List<SatelliteEntity> satellites,
+    Set<int> hiddenIds,
+    int renderLimit,
+  ) {
+    final visibleSatellites = satellites
+        .where((sat) => !hiddenIds.contains(sat.tle.noradCatId))
+        .toList(growable: false);
+
+    if (visibleSatellites.length <= renderLimit) {
+      return visibleSatellites;
+    }
+
+    final step = visibleSatellites.length / renderLimit;
+    return List<SatelliteEntity>.generate(renderLimit, (index) {
+      return visibleSatellites[(index * step).floor()];
+    }, growable: false);
   }
 
   void _toggleRotation() {
@@ -226,7 +262,22 @@ class _GlobeViewState extends ConsumerState<GlobeView>
     ref.listen<Set<int>>(hiddenSatellitesProvider, (previous, next) {
       if (previous != next) {
         _controller.clearSatellites();
-        _addSatellites(widget.satellites, next);
+        _addSatellites(
+          widget.satellites,
+          next,
+          ref.read(satelliteRenderLimitProvider),
+        );
+      }
+    });
+
+    ref.listen<int>(satelliteRenderLimitProvider, (previous, next) {
+      if (previous != next) {
+        _controller.clearSatellites();
+        _addSatellites(
+          widget.satellites,
+          ref.read(hiddenSatellitesProvider),
+          next,
+        );
       }
     });
 

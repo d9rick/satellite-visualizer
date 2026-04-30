@@ -54,6 +54,31 @@ final selectedSatelliteProvider =
       SelectedSatelliteNotifier.new,
     );
 
+class SatelliteRenderLimitNotifier extends Notifier<int> {
+  @override
+  int build() {
+    final savedLimit = _settingsBox.get(AppConstants.renderLimitKey) as int?;
+    if (savedLimit != null &&
+        AppConstants.satelliteRenderLimits.contains(savedLimit)) {
+      return savedLimit;
+    }
+    return AppConstants.defaultSatelliteRenderLimit;
+  }
+
+  Box<dynamic> get _settingsBox => Hive.box(AppConstants.satelliteSettingsBox);
+
+  Future<void> select(int limit) async {
+    if (state == limit) return;
+    state = limit;
+    await _settingsBox.put(AppConstants.renderLimitKey, limit);
+  }
+}
+
+final satelliteRenderLimitProvider =
+    NotifierProvider<SatelliteRenderLimitNotifier, int>(
+      SatelliteRenderLimitNotifier.new,
+    );
+
 class HiddenSatellitesNotifier extends Notifier<Set<int>> {
   @override
   Set<int> build() {
