@@ -1,43 +1,136 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_earth_globe/flutter_earth_globe.dart';
 import 'package:flutter_earth_globe/flutter_earth_globe_controller.dart';
 import 'package:flutter_earth_globe/globe_coordinates.dart';
 import 'package:flutter_earth_globe/satellite.dart' as globe;
+import 'package:flutter_earth_globe/point.dart' as globe_point;
 import 'package:flutter_sat/core/constants.dart';
 import 'package:flutter_sat/domain/satellite/models/satellite.dart';
+import 'package:flutter_sat/state/providers.dart';
+import 'package:flutter_sat/ui/widgets/satellite_info_dialog.dart';
 
-class GlobeView extends StatefulWidget {
+class GlobeView extends ConsumerStatefulWidget {
   final List<SatelliteEntity> satellites;
-  final ValueChanged<SatelliteEntity>? onSatelliteTapped;
 
-  const GlobeView({
-    super.key,
-    this.satellites = const [],
-    this.onSatelliteTapped,
-  });
+  const GlobeView({super.key, this.satellites = const []});
 
   @override
-  State<GlobeView> createState() => _GlobeViewState();
+  ConsumerState<GlobeView> createState() => _GlobeViewState();
 }
 
-class _GlobeViewState extends State<GlobeView> {
+class _GlobeViewState extends ConsumerState<GlobeView>
+    with SingleTickerProviderStateMixin {
   late final FlutterEarthGlobeController _controller;
   bool _isRotating = false;
+  bool _showGrid = false;
+
+  late Ticker _ticker;
+  final List<SatelliteEntity> _activeSatellites = [];
+
+  // Calculate GMST at given time to sync Earth's rotation frame with celestial RAAN
+  double _calculateGMST(DateTime date) {
+    final double jd = date.millisecondsSinceEpoch / 86400000.0 + 2440587.5;
+    final double d = jd - 2451545.0;
+    return (280.46061837 + 360.98564736629 * d) % 360.0;
+  }
 
   @override
   void initState() {
     super.initState();
     _controller = FlutterEarthGlobeController(
-      rotationSpeed: AppConstants.globeRotationSpeed,
-      isRotating: false,
+      rotationSpeed: 0.0,
+      isRotating: true, // Always run ticker for satellite animation
       zoom: 0.3,
       isBackgroundFollowingSphereRotation: true,
       background: const AssetImage('assets/2k_stars.jpg'),
       surface: const AssetImage('assets/2k_earth_day.jpg'),
     );
+
+    _ticker = createTicker((_) {
+      if (!mounted) return;
+      _updateSatellitePositions();
+    });
+
     _controller.onLoaded = () {
-      _addSatellites(widget.satellites);
+      if (mounted) {
+        _addSatellites(widget.satellites, ref.read(hiddenSatellitesProvider));
+        _ticker.start();
+      }
     };
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  void _updateSatellitePositions() {
+    final now = DateTime.now().toUtc();
+    final gmst = _calculateGMST(now);
+
+    for (final sat in _activeSatellites) {
+      final tle = sat.tle;
+
+      // Calculate Earth-Relative Epoch Time
+      final yy = (tle.epochYear / 1000).floor();
+      final year = yy < 57 ? 2000 + yy : 1900 + yy;
+      final days = tle.epochYear - (yy * 1000);
+      final daysInt = days.floor();
+      final fraction = days - daysInt;
+      final epochTime = DateTime.utc(year, 1, 1).add(
+        Duration(
+          days: daysInt - 1,
+          microseconds: (fraction * 24 * 60 * 60 * 1000000).round(),
+        ),
+      );
+
+      final periodSeconds = tle.meanMotion > 0
+          ? (86400.0 / tle.meanMotion)
+          : 5400.0;
+      final elapsedMs = now.difference(epochTime).inMilliseconds;
+      final periodMs = (periodSeconds * 1000).round();
+
+      if (periodMs <= 0) continue;
+
+      final phaseRad =
+          (tle.meanAnomaly * math.pi / 180) +
+          (2 * math.pi * elapsedMs / periodMs);
+      final trueAnomaly = phaseRad;
+
+      final incRad = tle.inclination * math.pi / 180;
+      final raanRad = tle.raan * math.pi / 180;
+      final argPeriRad = tle.argumentOfPerigee * math.pi / 180;
+
+      final u = trueAnomaly + argPeriRad;
+
+      final latitude =
+          math.asin(math.sin(incRad) * math.sin(u)) * 180 / math.pi;
+
+      // Calculate inertial longitude
+      double longitude =
+          (raanRad + math.atan2(math.cos(incRad) * math.sin(u), math.cos(u))) *
+          180 /
+          math.pi;
+
+      // Subtract GMST to convert from ECI (inertial) longitude to ECEF (Earth-fixed) longitude.
+      longitude = longitude - gmst;
+
+      longitude = longitude % 360;
+      if (longitude > 180) longitude -= 360;
+
+      // Only calculate, let flutter_earth_globe _update points natively?
+      // Replace the satellite's position directly on the globes controller
+      try {
+        _controller.updateSatellite(
+          sat.tle.noradCatId.toString(),
+          coordinates: GlobeCoordinates(latitude, longitude),
+        );
+      } catch (_) {}
+    }
   }
 
   @override
@@ -45,47 +138,120 @@ class _GlobeViewState extends State<GlobeView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.satellites != widget.satellites) {
       _controller.clearSatellites();
-      _addSatellites(widget.satellites);
+      _addSatellites(widget.satellites, ref.read(hiddenSatellitesProvider));
     }
   }
 
-  void _addSatellites(List<SatelliteEntity> satellites) {
+  void _addSatellites(List<SatelliteEntity> satellites, Set<int> hiddenIds) {
+    _activeSatellites.clear();
     for (final sat in satellites) {
-      final tle = sat.tle;
-      // Mean motion is revs/day -> period in seconds = 86400 / meanMotion
-      final periodSeconds =
-          tle.meanMotion > 0 ? (86400.0 / tle.meanMotion) : 5400.0;
+      if (hiddenIds.contains(sat.tle.noradCatId)) continue;
+      _activeSatellites.add(sat);
 
-      _controller.addSatellite(globe.Satellite(
-        id: sat.noradCatId.toString(),
-        coordinates: const GlobeCoordinates(0, 0),
-        altitude: 0.06,
-        label: sat.name,
-        orbit: globe.SatelliteOrbit(
-          inclination: tle.inclination,
-          raan: tle.raan,
-          period: Duration(seconds: periodSeconds.round()),
-          eccentricity: tle.eccentricity,
-          argumentOfPeriapsis: tle.argumentOfPerigee,
-          initialPhase: tle.meanAnomaly,
+      _controller.addSatellite(
+        globe.Satellite(
+          id: sat.tle.noradCatId.toString(),
+          coordinates: const GlobeCoordinates(
+            0,
+            0,
+          ), // Will be instantly updated by ticker
+          orbit: null, // Turn off built-in rotation bug
+          altitude: 0.06,
+          label: sat.label,
+          style: const globe.SatelliteStyle(
+            size: 3,
+            color: Colors.greenAccent,
+            shape: globe.SatelliteShape.circle,
+          ),
+          onTap: () {
+            ref.read(selectedSatelliteProvider.notifier).select(sat);
+            showDialog(
+              context: context,
+              builder: (context) => const SatelliteInfoDialog(),
+            );
+          },
         ),
-        style: const globe.SatelliteStyle(
-          size: 3,
-          color: Colors.greenAccent,
-          shape: globe.SatelliteShape.circle,
-        ),
-        onTap: () => widget.onSatelliteTapped?.call(sat),
-      ));
+      );
     }
   }
 
   void _toggleRotation() {
-    _controller.toggleRotation();
-    setState(() => _isRotating = _controller.isRotating);
+    setState(() {
+      _isRotating = !_isRotating;
+      _controller.setRotationSpeed(
+        _isRotating ? AppConstants.globeRotationSpeed : 0.0,
+      );
+    });
+  }
+
+  void _toggleGrid() {
+    setState(() {
+      _showGrid = !_showGrid;
+      if (_showGrid) {
+        // Draw latitude and longitude grids
+        for (int lon = -180; lon <= 180; lon += 5) {
+          for (int lat = -90; lat <= 90; lat += 5) {
+            // We want to skip drawing points where prime or equator lines exist
+            if (lon == 0 || lat == 0) continue;
+
+            _controller.addPoint(
+              globe_point.Point(
+                id: 'grid_${lat}_$lon',
+                coordinates: GlobeCoordinates(lat.toDouble(), lon.toDouble()),
+                style: const globe_point.PointStyle(
+                  size: 2,
+                  color: Colors.white54,
+                ),
+              ),
+            );
+          }
+        }
+        // Highlight Prime Meridian and Equator
+        for (int lat = -90; lat <= 90; lat += 2) {
+          _controller.addPoint(
+            globe_point.Point(
+              id: 'grid_prime_$lat',
+              coordinates: GlobeCoordinates(lat.toDouble(), 0),
+              style: const globe_point.PointStyle(
+                size: 3,
+                color: Colors.redAccent,
+              ),
+            ),
+          );
+        }
+        for (int lon = -180; lon <= 180; lon += 2) {
+          _controller.addPoint(
+            globe_point.Point(
+              id: 'grid_equator_$lon',
+              coordinates: GlobeCoordinates(0, lon.toDouble()),
+              style: const globe_point.PointStyle(
+                size: 3,
+                color: Colors.blueAccent,
+              ),
+            ),
+          );
+        }
+      } else {
+        // Remove all grid points
+        final gridPoints = _controller.points
+            .where((p) => p.id.startsWith('grid_'))
+            .toList();
+        for (var p in gridPoints) {
+          _controller.removePoint(p.id);
+        }
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<Set<int>>(hiddenSatellitesProvider, (previous, next) {
+      if (previous != next) {
+        _controller.clearSatellites();
+        _addSatellites(widget.satellites, next);
+      }
+    });
+
     return Stack(
       children: [
         LayoutBuilder(
@@ -94,9 +260,8 @@ class _GlobeViewState extends State<GlobeView> {
             return Center(
               child: Listener(
                 onPointerDown: (_) {
-                  if (_controller.isRotating) {
-                    _controller.stopRotation();
-                    setState(() => _isRotating = false);
+                  if (_isRotating) {
+                    _toggleRotation();
                   }
                 },
                 child: FlutterEarthGlobe(
@@ -110,10 +275,21 @@ class _GlobeViewState extends State<GlobeView> {
         Positioned(
           right: 16,
           bottom: 16,
-          child: FloatingActionButton.small(
-            onPressed: _toggleRotation,
-            tooltip: _isRotating ? 'Stop rotation' : 'Start rotation',
-            child: Icon(_isRotating ? Icons.pause : Icons.play_arrow),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton.small(
+                onPressed: _toggleGrid,
+                tooltip: _showGrid ? 'Hide Grid' : 'Show Grid',
+                child: Icon(_showGrid ? Icons.grid_off : Icons.grid_on),
+              ),
+              const SizedBox(height: 8),
+              FloatingActionButton.small(
+                onPressed: _toggleRotation,
+                tooltip: _isRotating ? 'Stop rotation' : 'Start rotation',
+                child: Icon(_isRotating ? Icons.pause : Icons.play_arrow),
+              ),
+            ],
           ),
         ),
       ],

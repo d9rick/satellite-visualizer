@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SatelliteEntity {
 
- int get noradCatId; String get name; Tle get tle;
+ String get label; Tle get tle;
 /// Create a copy of SatelliteEntity
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $SatelliteEntityCopyWith<SatelliteEntity> get copyWith => _$SatelliteEntityCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SatelliteEntity&&(identical(other.noradCatId, noradCatId) || other.noradCatId == noradCatId)&&(identical(other.name, name) || other.name == name)&&(identical(other.tle, tle) || other.tle == tle));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SatelliteEntity&&(identical(other.label, label) || other.label == label)&&(identical(other.tle, tle) || other.tle == tle));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,noradCatId,name,tle);
+int get hashCode => Object.hash(runtimeType,label,tle);
 
 @override
 String toString() {
-  return 'SatelliteEntity(noradCatId: $noradCatId, name: $name, tle: $tle)';
+  return 'SatelliteEntity(label: $label, tle: $tle)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $SatelliteEntityCopyWith<$Res>  {
   factory $SatelliteEntityCopyWith(SatelliteEntity value, $Res Function(SatelliteEntity) _then) = _$SatelliteEntityCopyWithImpl;
 @useResult
 $Res call({
- int noradCatId, String name, Tle tle
+ String label, Tle tle
 });
 
 
@@ -65,10 +65,9 @@ class _$SatelliteEntityCopyWithImpl<$Res>
 
 /// Create a copy of SatelliteEntity
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? noradCatId = null,Object? name = null,Object? tle = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? label = null,Object? tle = null,}) {
   return _then(_self.copyWith(
-noradCatId: null == noradCatId ? _self.noradCatId : noradCatId // ignore: cast_nullable_to_non_nullable
-as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String,tle: null == tle ? _self.tle : tle // ignore: cast_nullable_to_non_nullable
 as Tle,
   ));
@@ -164,10 +163,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int noradCatId,  String name,  Tle tle)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String label,  Tle tle)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SatelliteEntity() when $default != null:
-return $default(_that.noradCatId,_that.name,_that.tle);case _:
+return $default(_that.label,_that.tle);case _:
   return orElse();
 
 }
@@ -185,10 +184,10 @@ return $default(_that.noradCatId,_that.name,_that.tle);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int noradCatId,  String name,  Tle tle)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String label,  Tle tle)  $default,) {final _that = this;
 switch (_that) {
 case _SatelliteEntity():
-return $default(_that.noradCatId,_that.name,_that.tle);case _:
+return $default(_that.label,_that.tle);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -205,10 +204,10 @@ return $default(_that.noradCatId,_that.name,_that.tle);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int noradCatId,  String name,  Tle tle)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String label,  Tle tle)?  $default,) {final _that = this;
 switch (_that) {
 case _SatelliteEntity() when $default != null:
-return $default(_that.noradCatId,_that.name,_that.tle);case _:
+return $default(_that.label,_that.tle);case _:
   return null;
 
 }
@@ -220,11 +219,10 @@ return $default(_that.noradCatId,_that.name,_that.tle);case _:
 @JsonSerializable()
 
 class _SatelliteEntity implements SatelliteEntity {
-  const _SatelliteEntity({required this.noradCatId, required this.name, required this.tle});
+  const _SatelliteEntity({required this.label, required this.tle});
   factory _SatelliteEntity.fromJson(Map<String, dynamic> json) => _$SatelliteEntityFromJson(json);
 
-@override final  int noradCatId;
-@override final  String name;
+@override final  String label;
 @override final  Tle tle;
 
 /// Create a copy of SatelliteEntity
@@ -240,16 +238,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SatelliteEntity&&(identical(other.noradCatId, noradCatId) || other.noradCatId == noradCatId)&&(identical(other.name, name) || other.name == name)&&(identical(other.tle, tle) || other.tle == tle));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SatelliteEntity&&(identical(other.label, label) || other.label == label)&&(identical(other.tle, tle) || other.tle == tle));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,noradCatId,name,tle);
+int get hashCode => Object.hash(runtimeType,label,tle);
 
 @override
 String toString() {
-  return 'SatelliteEntity(noradCatId: $noradCatId, name: $name, tle: $tle)';
+  return 'SatelliteEntity(label: $label, tle: $tle)';
 }
 
 
@@ -260,7 +258,7 @@ abstract mixin class _$SatelliteEntityCopyWith<$Res> implements $SatelliteEntity
   factory _$SatelliteEntityCopyWith(_SatelliteEntity value, $Res Function(_SatelliteEntity) _then) = __$SatelliteEntityCopyWithImpl;
 @override @useResult
 $Res call({
- int noradCatId, String name, Tle tle
+ String label, Tle tle
 });
 
 
@@ -277,10 +275,9 @@ class __$SatelliteEntityCopyWithImpl<$Res>
 
 /// Create a copy of SatelliteEntity
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? noradCatId = null,Object? name = null,Object? tle = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? label = null,Object? tle = null,}) {
   return _then(_SatelliteEntity(
-noradCatId: null == noradCatId ? _self.noradCatId : noradCatId // ignore: cast_nullable_to_non_nullable
-as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String,tle: null == tle ? _self.tle : tle // ignore: cast_nullable_to_non_nullable
 as Tle,
   ));

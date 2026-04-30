@@ -8,14 +8,9 @@ part of 'satellite.dart';
 
 _SatelliteEntity _$SatelliteEntityFromJson(Map<String, dynamic> json) =>
     _SatelliteEntity(
-      noradCatId: (json['noradCatId'] as num).toInt(),
-      name: json['name'] as String,
+      label: json['label'] as String,
       tle: Tle.fromJson(json['tle'] as Map<String, dynamic>),
     );
 
 Map<String, dynamic> _$SatelliteEntityToJson(_SatelliteEntity instance) =>
-    <String, dynamic>{
-      'noradCatId': instance.noradCatId,
-      'name': instance.name,
-      'tle': instance.tle,
-    };
+    <String, dynamic>{'label': instance.label, 'tle': instance.tle};

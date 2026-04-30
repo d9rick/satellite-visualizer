@@ -1,14 +1,15 @@
+import 'package:flutter_sat/domain/satellite/models/satellite.dart';
 import 'package:flutter_sat/domain/satellite/models/tle.dart';
 
 class TleParser {
-  List<Tle> parse(String rawText) {
+  List<SatelliteEntity> parse(String rawText) {
     final lines = rawText
         .split('\n')
         .map((l) => l.trimRight())
         .where((l) => l.isNotEmpty)
         .toList();
 
-    final results = <Tle>[];
+    final results = <SatelliteEntity>[];
 
     for (int i = 0; i + 2 < lines.length; i += 3) {
       final nameLine = lines[i].trim();
@@ -29,7 +30,7 @@ class TleParser {
     return results;
   }
 
-  Tle _parseTleEntry(String name, String line1, String line2) {
+  SatelliteEntity _parseTleEntry(String name, String line1, String line2) {
     final noradCatId = int.parse(line1.substring(2, 7).trim());
     final intlDesignator = line1.substring(9, 17).trim();
     final epochYear = double.parse(line1.substring(18, 32).trim());
@@ -41,7 +42,7 @@ class TleParser {
     final meanAnomaly = double.parse(line2.substring(43, 51).trim());
     final meanMotion = double.parse(line2.substring(52, 63).trim());
 
-    return Tle(
+    final tle = Tle(
       name: name,
       line1: line1,
       line2: line2,
@@ -55,5 +56,7 @@ class TleParser {
       meanAnomaly: meanAnomaly,
       meanMotion: meanMotion,
     );
+
+    return SatelliteEntity(label: name, tle: tle);
   }
 }

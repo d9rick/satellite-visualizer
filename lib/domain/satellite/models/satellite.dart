@@ -6,11 +6,8 @@ part 'satellite.g.dart';
 
 @freezed
 abstract class SatelliteEntity with _$SatelliteEntity {
-  const factory SatelliteEntity({
-    required int noradCatId,
-    required String name,
-    required Tle tle,
-  }) = _SatelliteEntity;
+  const factory SatelliteEntity({required String label, required Tle tle}) =
+      _SatelliteEntity;
 
   factory SatelliteEntity.fromJson(Map<String, dynamic> json) =>
       _$SatelliteEntityFromJson(json);

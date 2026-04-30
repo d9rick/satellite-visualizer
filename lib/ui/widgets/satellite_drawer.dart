@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_sat/state/providers.dart';
+import 'package:flutter_sat/ui/widgets/satellite_search_delegate.dart';
 
 class SatelliteDrawer extends ConsumerWidget {
   const SatelliteDrawer({super.key});
@@ -8,6 +9,7 @@ class SatelliteDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final satellitesAsync = ref.watch(satelliteListProvider);
+    final hiddenSatellites = ref.watch(hiddenSatellitesProvider);
 
     return Drawer(
       child: Column(
@@ -20,13 +22,65 @@ class SatelliteDrawer extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                const Text(
-                  'Satellites',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Satellites',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (satellitesAsync.hasValue)
+                      IconButton(
+                        icon: const Icon(Icons.search),
+                        onPressed: () async {
+                          final sat = await showSearch(
+                            context: context,
+                            delegate: SatelliteSearchDelegate(
+                              satellites: satellitesAsync.value!,
+                            ),
+                          );
+                          if (sat != null && context.mounted) {
+                            final hidden = ref.read(hiddenSatellitesProvider);
+                            if (hidden.contains(sat.tle.noradCatId)) {
+                              ref
+                                  .read(hiddenSatellitesProvider.notifier)
+                                  .toggle(sat.tle.noradCatId);
+                            }
+                            // Close drawer
+                            Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 satellitesAsync.when(
-                  data: (sats) => Text('${sats.length} satellites loaded'),
+                  data: (sats) {
+                    final visibleCount = sats.length - hiddenSatellites.length;
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('$visibleCount / ${sats.length} visible'),
+                        TextButton(
+                          onPressed: () {
+                            final allHidden =
+                                hiddenSatellites.length == sats.length;
+                            ref
+                                .read(hiddenSatellitesProvider.notifier)
+                                .toggleAll(sats, allHidden);
+                          },
+                          child: Text(
+                            hiddenSatellites.length == sats.length
+                                ? 'Show All'
+                                : 'Hide All',
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                   loading: () => const Text('Loading...'),
                   error: (e, _) => Text('Error: $e'),
                 ),
@@ -39,11 +93,28 @@ class SatelliteDrawer extends ConsumerWidget {
                 itemCount: satellites.length,
                 itemBuilder: (context, index) {
                   final sat = satellites[index];
+                  final isHidden = hiddenSatellites.contains(
+                    sat.tle.noradCatId,
+                  );
+
                   return ListTile(
                     leading: const Icon(Icons.satellite_alt),
-                    title: Text(sat.name),
-                    subtitle: Text('NORAD: ${sat.noradCatId}'),
+                    title: Text(sat.label),
+                    subtitle: Text('NORAD: ${sat.tle.noradCatId}'),
                     dense: true,
+                    trailing: Switch(
+                      value: !isHidden,
+                      onChanged: (bool value) {
+                        ref
+                            .read(hiddenSatellitesProvider.notifier)
+                            .toggle(sat.tle.noradCatId);
+                      },
+                    ),
+                    onTap: () {
+                      ref
+                          .read(hiddenSatellitesProvider.notifier)
+                          .toggle(sat.tle.noradCatId);
+                    },
                   );
                 },
               ),
@@ -62,8 +133,7 @@ class SatelliteDrawer extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: () =>
-                            ref.invalidate(satelliteListProvider),
+                        onPressed: () => ref.invalidate(satelliteListProvider),
                         child: const Text('Retry'),
                       ),
                     ],

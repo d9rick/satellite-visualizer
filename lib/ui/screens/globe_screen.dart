@@ -13,7 +13,11 @@ class GlobeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Flutter Sat'),
+        title: satellitesAsync.when(
+          data: (sats) => Text('Satellites: ${sats.length}'),
+          loading: () => const Text('Loading...'),
+          error: (err, stack) => const Text('Error'),
+        ),
         actions: [
           satellitesAsync.whenOrNull(
                 data: (sats) => Center(

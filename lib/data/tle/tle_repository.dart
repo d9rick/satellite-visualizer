@@ -52,17 +52,7 @@ class TleRepository {
     int timestamp,
   ) async {
     final rawText = await _api.fetchTleGroup(group);
-    final tles = _parser.parse(rawText);
-
-    final satellites = tles
-        .map(
-          (tle) => SatelliteEntity(
-            noradCatId: tle.noradCatId,
-            name: tle.name,
-            tle: tle,
-          ),
-        )
-        .toList();
+    final satellites = _parser.parse(rawText);
 
     final jsonStr = jsonEncode(satellites.map((s) => s.toJson()).toList());
     await box.put('${group}_data', jsonStr);
