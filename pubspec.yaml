@@ -33,7 +33,8 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.2.1
-  flutter_earth_globe: ^2.2.0
+  flutter_earth_globe:
+    path: packages/flutter_earth_globe
   dio: ^5.9.2
   hive_flutter: ^1.1.0
   freezed_annotation: ^3.0.0

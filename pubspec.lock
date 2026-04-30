@@ -241,10 +241,9 @@ packages:
   flutter_earth_globe:
     dependency: "direct main"
     description:
-      name: flutter_earth_globe
-      sha256: d5b2d9a9ae9ad667808b0e5efc59dd3155051218f409cdb645b89a2d722e1745
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/flutter_earth_globe"
+      relative: true
+    source: path
     version: "2.2.0"
   flutter_lints:
     dependency: "direct dev"
